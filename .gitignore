@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Test / scratch output (never commit generated work dirs)
+tests/work/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
