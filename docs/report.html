@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Vita Save Decryptor (native) — Report &amp; User Guide</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2d3a4f;
+    --text: #e6edf3;
+    --muted: #9aa7b8;
+    --accent: #58a6ff;
+    --accent2: #bc8cff;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: A4; margin: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13.5px; line-height: 1.62; }
+
+  /* ---------- page geometry (A4 @ ~96dpi) ---------- */
+  .page { width: 794px; min-height: 1123px; padding: 48px 56px; position: relative; overflow: hidden; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+
+  /* keep whole blocks intact across page breaks (no mid-element splits) */
+  .callout, pre, table, .phase, .pipe, .card, .shot, h3 { break-inside: avoid; page-break-inside: avoid; }
+
+  /* ---------- cover ---------- */
+  .cover { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(ellipse at 50% -10%, #1b2a4a 0%, var(--bg) 60%); }
+  .cover img.logo { width: 300px; margin-bottom: 28px; filter: drop-shadow(0 8px 30px rgba(88,166,255,.35)); }
+  .cover h1 { font-size: 40px; letter-spacing: .5px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 8px; }
+  .cover .subtitle { font-size: 17px; color: var(--muted); max-width: 560px; margin-bottom: 34px; }
+  .badge-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 40px; }
+  .badge { border: 1px solid var(--border); background: var(--panel); padding: 7px 16px; border-radius: 999px; font-size: 12.5px; color: var(--muted); }
+  .badge b { color: var(--text); }
+  .cover .byline { margin-top: 46px; font-size: 13px; color: var(--muted); line-height: 2; }
+  .cover .byline a { color: var(--accent); text-decoration: none; }
+
+  /* ---------- headings ---------- */
+  h2.sec { font-size: 24px; margin-bottom: 6px; padding-left: 14px; border-left: 5px solid var(--accent); letter-spacing: .3px; page-break-after: avoid; }
+  h2.sec .num { color: var(--accent2); font-weight: 800; margin-right: 8px; }
+  .sec-sub { color: var(--muted); margin-bottom: 22px; padding-left: 19px; font-size: 13px; }
+  h3 { font-size: 16.5px; margin: 20px 0 8px; color: #fff; }
+  p { margin-bottom: 10px; }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ---------- cards / panels ---------- */
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .stat { text-align: center; padding: 14px 8px; }
+  .stat .big { font-size: 26px; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat .lbl { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  /* ---------- steps ---------- */
+  ol.steps { list-style: none; counter-reset: step; }
+  ol.steps > li { counter-increment: step; position: relative; padding: 0 0 20px 58px; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: -2px; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(88,166,255,.3); }
+  ol.steps > li::after { content: ""; position: absolute; left: 19px; top: 42px; bottom: 4px; width: 2px; background: var(--border); }
+  ol.steps > li:last-child::after { display: none; }
+  .step-title { font-weight: 700; font-size: 15px; margin-bottom: 3px; color: #fff; }
+
+  /* ---------- callouts ---------- */
+  .callout { border-radius: 10px; padding: 12px 16px; margin: 14px 0; font-size: 13px; border: 1px solid; }
+  .callout .tag { font-weight: 800; text-transform: uppercase; letter-spacing: 1px; font-size: 11px; display: block; margin-bottom: 4px; }
+  .c-info    { background: rgba(88,166,255,.08);  border-color: rgba(88,166,255,.35); }   .c-info .tag { color: var(--accent); }
+  .c-warn    { background: rgba(210,153,34,.09);  border-color: rgba(210,153,34,.4); }    .c-warn .tag { color: var(--amber); }
+  .c-success { background: rgba(63,185,80,.08);   border-color: rgba(63,185,80,.35); }    .c-success .tag { color: var(--green); }
+
+  /* ---------- code / formulas ---------- */
+  pre { background: #0a0e14; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.55; overflow-x: hidden; white-space: pre-wrap; color: #c9d7e8; margin-bottom: 14px; }
+  code { font-family: "Cascadia Code", Consolas, monospace; background: rgba(110,118,129,.25); padding: 1.5px 6px; border-radius: 5px; font-size: 12px; color: #dce7f3; }
+  pre code { background: none; padding: 0; }
+
+  /* ---------- screenshots ---------- */
+  .shot { text-align: center; margin: 14px 0; }
+  .shot img { max-width: 100%; max-height: 340px; object-fit: contain; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .shot .cap { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+
+  /* ---------- timeline (how it was done) ---------- */
+  .phase { display: flex; gap: 16px; margin-bottom: 16px; }
+  .phase .ph-num { flex: 0 0 46px; height: 46px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--accent2); font-size: 15px; }
+  .phase .ph-body { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  .phase .ph-title { font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .phase .ph-tag { float: right; font-size: 10.5px; color: var(--muted); border: 1px solid var(--border); padding: 2px 9px; border-radius: 999px; margin-top: 3px; }
+
+  /* ---------- pipeline diagram ---------- */
+  .pipe { display: flex; align-items: stretch; gap: 0; margin: 16px 0; }
+  .pipe .node { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; text-align: center; position: relative; }
+  .pipe .node .n-title { font-weight: 700; color: #fff; font-size: 13.5px; margin-bottom: 4px; }
+  .pipe .node .n-sub { font-size: 11px; color: var(--muted); line-height: 1.45; }
+  .pipe .arrow { flex: 0 0 34px; display: flex; align-items: center; justify-content: center; color: var(--accent2); font-size: 22px; font-weight: 800; }
+  .node.hl { border-color: rgba(188,140,255,.6); background: linear-gradient(160deg, rgba(188,140,255,.12), var(--panel)); }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 12.5px; }
+  th { text-align: left; color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+  td { padding: 9px 10px; border-bottom: 1px solid rgba(45,58,79,.6); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---------- footer ---------- */
+  .foot { position: absolute; bottom: 22px; left: 56px; right: 56px; display: flex; justify-content: space-between; font-size: 10.5px; color: #5b6779; border-top: 1px solid var(--border); padding-top: 8px; }
+  .foot b { color: var(--muted); }
+
+  ul.clean { list-style: none; }
+  ul.clean li { padding-left: 20px; position: relative; margin-bottom: 7px; }
+  ul.clean li::before { content: "▸"; position: absolute; left: 2px; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<div class="page cover">
+  <img class="logo" src="report_assets/logo-cover.png"/>
+  <h1>Vita Save Decryptor (native)</h1>
+  <div class="subtitle">Project report &amp; user guide — how a PS Vita save decryptor was rebuilt from scratch, fully offline</div>
+  <div class="badge-row">
+    <span class="badge"><b>v0.2.0-native</b></span>
+    <span class="badge">Windows x64 · single .exe</span>
+    <span class="badge">100% offline — no key service</span>
+    <span class="badge">Byte-exact output</span>
+  </div>
+  <div class="byline">
+    Made by <b>The New Game+</b><br/>
+    <a href="https://www.youtube.com/@TheNewGamePluss">YouTube</a> &nbsp;·&nbsp;
+    <a href="https://ko-fi.com/thenewgameplus">Ko-fi</a> &nbsp;·&nbsp;
+    <a href="https://discord.gg/nwXq8wZzEA">Discord</a><br/>
+    Source: <a href="https://github.com/Johnzx07/vita-save-decryptor">github.com/Johnzx07/vita-save-decryptor</a>
+  </div>
+</div>
+
+<!-- ============================ PAGE 2 : WHAT IT IS + TOC ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">01</span>The app in one minute</h2>
+  <div class="sec-sub">What it is, why it exists, and what makes this version different.</div>
+
+  <p><b>Vita Save Decryptor (native)</b> turns a PS Vita CMA save backup (<code>savedata.psvimg</code>) into plain files ready for the
+  <a href="https://github.com/Vita3K/vita3k">Vita3K</a> emulator. It is a single Windows executable — no install, no setup.</p>
+
+  <div class="grid2" style="margin-top:14px;">
+    <div class="card stat"><div class="big">0</div><div class="lbl">Online services needed</div></div>
+    <div class="card stat"><div class="big">1</div><div class="lbl">Runtime dependency (pycryptodome)</div></div>
+    <div class="card stat"><div class="big">4/4</div><div class="lbl">Encrypted files byte-exact vs reference</div></div>
+    <div class="card stat"><div class="big">~10s</div><div class="lbl">Typical decrypt time per save</div></div>
+  </div>
+
+  <h3>The problem this solves</h3>
+  <p>The original tooling for CMA backups required an external program (<code>psvpfsparser.exe</code>) that phoned home to the
+  F00D key service at <code>cma.henkaku.xyz</code>. If that service goes down — or you're offline — decryption stops working.
+  This project reverse-engineered the entire PFS encryption scheme and re-implemented it in pure Python, so keys are now
+  derived <b>locally from the save's own sealed key</b>.</p>
+
+  <div class="callout c-success">
+    <span class="tag">Bottom line</span>
+    Same output as the original tool — verified byte-for-byte — with zero network access and no bundled parser executable.
+  </div>
+
+  <h3 style="margin-top:24px;">Contents</h3>
+  <table>
+    <tr><td style="width:70px;"><b style="color:var(--accent);">01</b></td><td>The app in one minute</td></tr>
+    <tr><td><b style="color:var(--accent);">02</b></td><td>How to use the app — step by step</td></tr>
+    <tr><td><b style="color:var(--accent);">03</b></td><td>Troubleshooting &amp; FAQ</td></tr>
+    <tr><td><b style="color:var(--accent);">04</b></td><td>How it was done — the reverse-engineering story</td></tr>
+    <tr><td><b style="color:var(--accent);">05</b></td><td>Technical reference — keys, XTS-AES &amp; the ICV oracle</td></tr>
+    <tr><td><b style="color:var(--accent);">06</b></td><td>Credits, licenses &amp; support</td></tr>
+  </table>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 3 : HOW TO USE ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">02</span>How to use the app</h2>
+  <div class="sec-sub">From backup folder to decrypted save in four steps.</div>
+
+  <ol class="steps">
+    <li>
+      <div class="step-title">Get your CMA backup + key</div>
+      On a PS Vita with the CMA plugin, back up the game's savedata. You'll get a folder containing
+      <code>savedata.psvimg</code> — and the site shows you a <b>64-character hex key</b>. Write it down; you need it for every backup.
+    </li>
+    <li>
+      <div class="step-title">Launch VitaSaveDecryptor.exe</div>
+      Double-click the executable (from the GitHub release). No installation, no admin rights needed.
+    </li>
+    <li>
+      <div class="step-title">Point it at your backup &amp; enter the key</div>
+      Click <b>Browse…</b> and select either the <code>.psvimg</code> file itself or any folder that contains it. Paste the 64-hex CMA key into the field.
+    </li>
+    <li>
+      <div class="step-title">Choose an output folder &amp; hit Decrypt</div>
+      Pick where decrypted files should go, then click <b>Decrypt Save…</b>. Watch the six pipeline stages complete — your save is ready for Vita3K.
+    </li>
+  </ol>
+
+  <div class="shot">
+    <img src="report_assets/screenshot-main-window.jpg"/>
+    <div class="cap">The main window — pick a backup, enter the CMA key, choose output, decrypt.</div>
+  </div>
+
+  <div class="callout c-info">
+    <span class="tag">Good to know</span>
+    Your original backup is <b>never modified</b>. Everything is written to the separate output folder you chose.
+    Re-running on the same backup always produces identical results (the process is fully deterministic).
+  </div>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 4 : OUTPUT + TROUBLESHOOTING ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">03</span>Output &amp; troubleshooting</h2>
+  <div class="sec-sub">What you get, and what to do when something goes wrong.</div>
+
+  <h3>What the output looks like</h3>
+  <p>The decrypted set mirrors the game's PFS savedata layout:</p>
+<pre><code>your_output_folder/
+├── system.dat            ← save data (encrypted → now plain)
+├── sce_sys/
+│   ├── param.sfo         ← metadata (title, size, version…)
+│   ├── sdslot.dat        ← slot info
+│   ├── safemem.dat       ← safe memory
+│   ├── keystone          ← Henkaku keystone (if present)
+│   └── sealedkey         ← the key material used for decryption</code></pre>
+  <p>Load this folder into Vita3K as a save file and you're done.</p>
+
+  <h3 style="margin-top:18px;">Common problems</h3>
+  <table>
+    <tr><th style="width:42%;">Symptom</th><th>Cause &amp; fix</th></tr>
+    <tr><td>"Invalid CMA key"</td><td>The key must be exactly 64 hex characters. Copy it fresh from the CMA site — no spaces, no quotes.</td></tr>
+    <tr><td>"CMA extraction failed (stage 1)"</td><td>Wrong CMA key for this backup, or a corrupted <code>.psvimg</code>. Each backup has its own unique key.</td></tr>
+    <tr><td>"No PFS save set found"</td><td>The archive isn't a Vita savedata. Make sure you backed up the game's <i>savedata</i>, not the whole app package.</td></tr>
+    <tr><td>"PFS decryption failed (stage 2)"</td><td>The sealed key didn't match this save — usually means the backup and key are from different backups. Pair them correctly.</td></tr>
+    <tr><td>Nothing happens on launch</td><td>Windows SmartScreen may block unsigned exes: click <i>More info → Run anyway</i>. Or check your antivirus quarantine.</td></tr>
+  </table>
+
+  <div class="callout c-warn">
+    <span class="tag">Note</span>
+    The app is fully offline, but the CMA key itself comes from the henkaku.xyz CMA site when you create a backup. If you lose your key,
+    you'll need to re-back up (or find it in your browser history) — there's no way around that; it's how CMA works.
+  </div>
+
+  <h3 style="margin-top:18px;">Requirements</h3>
+  <ul class="clean">
+    <li>Windows 10 or 11, 64-bit</li>
+    <li>A PS Vita CMA save backup (<code>savedata.psvimg</code>) + its 64-hex key</li>
+    <li>No internet connection required at any point during decryption</li>
+  </ul>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 5 : HOW IT WAS DONE (1/2) ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">04</span>How it was done</h2>
+  <div class="sec-sub">The reverse-engineering story — from a dead-end dependency to a byte-exact pure-Python decryptor.</div>
+
+  <p>The goal: remove the online key service. That meant answering one question — <i>how does psvpfsparser turn a sealed key into
+  per-file decryption keys?</i> The answer required pulling apart the reference tool's C++ source and rebuilding its math from scratch.</p>
+
+  <div class="phase">
+    <div class="ph-num">P1</div>
+    <div class="ph-body"><span class="ph-tag">reconnaissance</span>
+      <div class="ph-title">Map the pipeline &amp; capture ground truth</div>
+      Documented the two-stage flow (CMA unpack → PFS decrypt), captured a real h-encore release save (PCSG90096) as a regression fixture,
+      and recorded the reference tool's exact output byte-for-byte — the target to beat.
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="ph-num">P2</div>
+    <div class="ph-body"><span class="ph-tag">source analysis</span>
+      <div class="ph-title">Read the reference implementation (read-only)</div>
+      Pulled psvpfstools' C++ sources locally and traced the call path: <code>xts_dec → pfs_decrypt_icv → XTS-AES</code>.
+      Confirmed the cipher is <b>XTS-AES-128 with two derived keys</b>, 0x8000-byte sectors, IEEE-1619 perturbation that carries across all 512 sub-blocks per sector.
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="ph-num">P3</div>
+    <div class="ph-body"><span class="ph-tag">key derivation</span>
+      <div class="ph-title">Crack the klicensee — the breakthrough</div>
+      The per-file keys derive from a 16-byte "klicensee" value. Brute-forcing candidate derivations of the sealed key, one stood out:
+      <b>AES-CBC decrypting the first 16 bytes of the sealed-key blob with a fixed PSVita system key</b> — producing exactly the value the F00D service had returned. All four encrypted files then matched byte-for-byte.
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="ph-num">P4</div>
+    <div class="ph-body"><span class="ph-tag">classification</span>
+      <div class="ph-title">Which files decrypt, which copy?</div>
+      Parsed the set's <code>files.db</code> (SCENGPFS v3) and found a clean rule in the type field:
+      <b><code>type &amp; 0x4000</code> → copy verbatim, otherwise XTS-decrypt.</b> Verified against every file in the fixture — no hardcoded file lists.
+    </div>
+  </div>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 6 : HOW IT WAS DONE (2/2) ============================ -->
+<div class="page">
+  <h2 class="sec" style="border-color:var(--accent2);"><span class="num">04</span>The ICV Merkle oracle</h2>
+  <div class="sec-sub">The final piece — resolving which salt belongs to which file, with zero guessing.</div>
+
+  <p>Each encrypted file is keyed by a per-file <b>salt</b> (a 32-bit value stored as the name of its <code>.icv</code> record).
+  The set contains several salts and no direct "file → salt" mapping — so how do you know which one to use? Heuristics (entropy, text-likeness)
+  worked for most files but failed on small binaries like <code>keystone</code>, where three candidate salts all looked plausible.</p>
+
+  <div class="callout c-success">
+    <span class="tag">The insight</span>
+    The stored 20-byte ICV in each record is a Merkle root computed over the file's <b>ciphertext</b> sectors — not the plaintext.
+    That makes it an oracle: for every candidate salt, compute the expected root and compare. Exactly one matches per file. Deterministic, no guessing.
+  </div>
+
+  <h3 style="margin-top:16px;">Verification results</h3>
+  <table>
+    <tr><th>File</th><th>Type rule</th><th>Salt (ICV oracle)</th><th>Result vs reference tool</th></tr>
+    <tr><td><code>system.dat</code></td><td>XTS-decrypt</td><td><code>aad62c72</code></td><td style="color:var(--green);">✔ byte-exact (105,472 B)</td></tr>
+    <tr><td><code>sce_sys/sdslot.dat</code></td><td>XTS-decrypt</td><td><code>58b8e8cf</code></td><td style="color:var(--green);">✔ byte-exact (46,080 B)</td></tr>
+    <tr><td><code>sce_sys/safemem.dat</code></td><td>XTS-decrypt</td><td><code>621b0519</code></td><td style="color:var(--green);">✔ byte-exact (16,384 B)</td></tr>
+    <tr><td><code>sce_sys/keystone</code></td><td>XTS-decrypt</td><td><code>cbab98f3</code></td><td style="color:var(--green);">✔ byte-exact (1,024 B)</td></tr>
+    <tr><td><code>sce_sys/param.sfo</code></td><td>copy verbatim</td><td>—</td><td style="color:var(--green);">✔ identical</td></tr>
+    <tr><td><code>sce_sys/sealedkey</code></td><td>copy verbatim</td><td>—</td><td style="color:var(--green);">✔ identical</td></tr>
+  </table>
+
+  <p>A regression test suite (<code>tests/test_pfs_native.py</code>) re-runs this end-to-end on the vendored fixture — 9 checks, all passing —
+  so any future change is immediately checked against ground truth.</p>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 7 : TECHNICAL REFERENCE ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">05</span>Technical reference</h2>
+  <div class="sec-sub">The exact math, for anyone who wants to reproduce it.</div>
+
+  <h3>Pipeline</h3>
+  <div class="pipe">
+    <div class="node"><div class="n-title">savedata.psvimg</div><div class="n-sub">CMA archive + 64-hex key</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="n-title">Stage 1 · unpack</div><div class="n-sub">psvimg-extract.exe (bundled, MIT) → PFS set: files.db + icv.db + .icv pages</div></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><div class="n-title">Stage 2 · native decrypt</div><div class="n-sub">pure Python — keys derived locally, XTS-AES-128, ICV Merkle salt oracle</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="n-title">Plain files</div><div class="n-sub">ready for Vita3K</div></div>
+  </div>
+
+  <h3>Key derivation chain</h3>
+<pre><code># 1. klicensee — AES-CBC decrypt of the sealed-key blob's first block
+klicensee = AES-CBC-Decrypt( sealedkey_blob[0:16], key=PSVITA_FIXED_KEY, iv=zeros )
+
+# 2. per-file keys (ctr selects data key vs tweak key)
+base0   = SHA1( klicensee )
+saltin  = salt.to_bytes(4,"little") + ctr.to_bytes(4,"little")     # 8 bytes
+key_ctr = SHA1( base0 || SHA1(saltin).digest() ).digest()[ :16 ]
+dec_key, tweak_enc_key = key_ctr(ctr=1), key_ctr(ctr=2)
+
+# 3. ICV secret (for the Merkle oracle)
+secret  = SHA1( SHA1(klicensee) || SHA1( [0xA, salt]_LE8 ) )</code></pre>
+
+  <h3>XTS-AES-128 sector decryption</h3>
+<pre><code># per 0x8000-byte sector: seed once, perturb across all 512 sub-blocks
+seed = AES-ECB( tweak_enc_key, u64_LE( 0x8000 * sector_index ) )
+for each 16-byte block i in the sector (i = 0..511):
+    tweak_i = IEEE-1619-perturb( seed, i )          # GF(2^128) × x, carry across blocks
+    plain[i] = AES-ECB-Decrypt( dec_key, cipher[i] XOR tweak_i )</code></pre>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE : TECHNICAL REFERENCE (cont.) ============================ -->
+<div class="page">
+  <h2 class="sec" style="border-color:var(--accent2);"><span class="num">05</span>The salt oracle &amp; constants</h2>
+  <div class="sec-sub">How the right salt is found — and every magic number in one place.</div>
+
+  <h3 style="margin-top:8px;">ICV Merkle tree (salt oracle)</h3>
+<pre><code># leaf per sector: HMAC-SHA1 over the CIPHERTEXT sector
+leaf_j = HMAC-SHA1( secret, ciphertext_sector_j )
+# complete binary tree, BFS heap layout (1-based; children of i are 2i, 2i+1)
+root   = merkle_fold( leaves )                      # left-inherits / right-advances
+match  = ( root == stored_icv_root_in_.icv_record ) # exactly one salt matches per file</code></pre>
+
+  <h3 style="margin-top:18px;">Constants &amp; magic numbers</h3>
+  <table>
+    <tr><th>Constant</th><th>Value / rule</th></tr>
+    <tr><td><code>PSVITA_FIXED_KEY</code></td><td>16-byte fixed key (in source) — AES-CBC-decrypts the sealed-key blob's first block to recover <code>klicensee</code></td></tr>
+    <tr><td>Sector size</td><td><code>0x8000</code> bytes = 512 × 16-byte sub-blocks; XTS seed advances per sector</td></tr>
+    <tr><td>Cipher mode</td><td>XTS-AES-128, two keys — data key (<code>ctr=1</code>) + tweak key (<code>ctr=2</code>), IEEE-1619 perturbation across all 512 blocks</td></tr>
+    <tr><td>Per-file salt</td><td>32-bit LE; <code>key = SHA1( SHA1(klicensee) ‖ SHA1(salt‖ctr) )[:16]</code></td></tr>
+    <tr><td>ICV record header</td><td><code>nSectors</code> @ offset <code>0x28</code>; stored ICV root (HMAC-SHA1) @ offset <code>0x2C</code></td></tr>
+    <tr><td>files.db type rule</td><td><code>type &amp; 0x4000</code> → copy verbatim, otherwise XTS-decrypt</td></tr>
+  </table>
+
+  <div class="callout c-info">
+    <span class="tag">Design note</span>
+    No code was copied from the reference tool — it served strictly as a behavioral specification. The implementation is original Python
+    (pycryptodome for AES/SHA1), verified against captured ground truth rather than by diffing source.
+  </div>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+<!-- ============================ PAGE 8 : CREDITS + SUPPORT ============================ -->
+<div class="page">
+  <h2 class="sec"><span class="num">06</span>Credits &amp; support</h2>
+  <div class="sec-sub">Credit where it's due — and how to reach the project.</div>
+
+  <h3>Built by</h3>
+  <p><b>The New Game+</b> — author, GUI, and native re-implementation. This report was written as part of the open-source release at
+  <a href="https://github.com/Johnzx07/vita-save-decryptor">github.com/Johnzx07/vita-save-decryptor</a>.</p>
+
+  <h3 style="margin-top:16px;">Third-party components &amp; licenses</h3>
+  <table>
+    <tr><th>Component</th><th>License</th><th>Role in this project</th></tr>
+    <tr><td>Vita Save Decryptor (this app)</td><td>MIT — © 2026 The New Game+</td><td>The application itself</td></tr>
+    <tr><td><a href="https://github.com/yifanlu/psvimgtools">psvimgtools</a> — Yifan Lu</td><td>MIT (© 2017)</td><td>Bundled stage-1 CMA unpacker + Cygwin DLLs</td></tr>
+    <tr><td><a href="https://github.com/qtproject/pyside-pyside-setup">PySide6</a> — The Qt Company &amp; contributors</td><td>LGPL v3 / Commercial</td><td>GUI toolkit (dynamically linked, unmodified)</td></tr>
+    <tr><td><a href="https://github.com/Legrandin/pycryptodome">pycryptodome</a> — Helder Eijs</td><td>BSD-3-Clause</td><td>AES / SHA1 primitives for stage 2</td></tr>
+    <tr><td><a href="https://github.com/TheOfficialFloW/h-encore">h-encore</a> — TheFloW</td><td>MIT (© 2018)</td><td>Public regression test fixture (PCSG90096) only</td></tr>
+    <tr><td><a href="https://github.com/motoharu-gosuto/psvpfstools">psvpfstools</a> — motoharu-gosuto</td><td>No license published upstream</td><td>Read-only behavioral reference (nothing copied or redistributed)</td></tr>
+  </table>
+
+  <h3 style="margin-top:16px;">The Vita3K community</h3>
+  <p>This work builds on PS Vita preservation research from the broader community, including the
+  <a href="https://github.com/Vita3K/vita3k">Vita3K</a> emulator project and its PFS tooling lineage. No Vita3K source is compiled into this app —
+  the credit reflects research, compatibility work, and community guidance.</p>
+
+  <div class="shot" style="margin-top:18px;">
+    <img src="report_assets/screenshot-about-dialog.jpg"/>
+    <div class="cap">The About dialog in-app carries the same links.</div>
+  </div>
+
+  <h3 style="margin-top:14px;">Support &amp; community</h3>
+  <table>
+    <tr><td style="width:120px;"><b>📺 YouTube</b></td><td><a href="https://www.youtube.com/@TheNewGamePluss">youtube.com/@TheNewGamePluss</a> — guides &amp; walkthroughs</td></tr>
+    <tr><td><b>☕ Ko-fi</b></td><td><a href="https://ko-fi.com/thenewgameplus">ko-fi.com/thenewgameplus</a> — buy me a coffee</td></tr>
+    <tr><td><b>💬 Discord</b></td><td><a href="https://discord.gg/nwXq8wZzEA">NGP "Bench" community</a> — hang out &amp; get help</td></tr>
+  </table>
+
+  <div class="callout c-info" style="margin-top:16px;">
+    <span class="tag">License</span>
+    This application is released under the MIT License. Full third-party notices live in <code>THIRD_PARTY_NOTICES.md</code> and
+    <code>licenses/</code> in the repository.
+  </div>
+
+  <div class="foot"><span>Vita Save Decryptor (native) — report &amp; user guide</span><span>v0.2.0-native · The New Game+</span></div>
+</div>
+
+</body>
+</html>

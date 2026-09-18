@@ -22,6 +22,10 @@
   <img src="docs/images/screenshot-about-dialog.png" alt="About dialog" width="480"/>
 </p>
 
+## 📄 Full project report
+
+A complete **report & user guide** — how it was done, how to use the app, and a technical reference: **[docs/report.pdf](docs/report.pdf)**
+
 ---
 
 ## Support & community
