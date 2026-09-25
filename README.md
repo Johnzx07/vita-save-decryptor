@@ -38,6 +38,15 @@ If this tool helps you, consider supporting the work:
 | ☕ **Ko-fi** | [thenewgameplus](https://ko-fi.com/thenewgameplus) — buy me a coffee |
 | 💬 **Discord** | [NGP "Bench" community](https://discord.gg/nwXq8wZzEA) — hang out & get help |
 
+### Report an issue / feedback
+
+Hit a decryption error, or a save that won't load into Vita3K? Tell me — that feedback drives the next version.
+
+- **Report an issue** — open a [GitHub issue](https://github.com/Johnzx07/vita-save-decryptor/issues). Include the game's title ID, the error text or screenshot, and whether it's a stage-1 (unpack) or stage-2 (decrypt) failure.
+- **Quick help** — ask in the [NGP "Bench" Discord](#).
+
+
+
 ---
 
 ## What it does
