@@ -499,6 +499,14 @@ class MainWindow(QMainWindow):
             break
 
     # ---------------- decrypt flow ----------------------------------------- #
+    def _set_inputs_enabled(self, on: bool) -> None:
+        """Enable/disable every input a run touches. Used on start and on
+        BOTH terminal paths (_on_done and _on_error) so a finished or failed
+        run can never leave the key field locked."""
+        for w in (self.decrypt_btn, self.browse_btn, self.out_browse,
+                  self.key_edit, self.show_key):
+            w.setEnabled(on)
+
     def _start_decrypt(self) -> None:
         key = self.key_edit.text().strip()
         if not KEY_RE.fullmatch(key):
@@ -527,9 +535,7 @@ class MainWindow(QMainWindow):
 
         self._reset_stages()
         self.success_frame.hide()
-        for w in (self.decrypt_btn, self.browse_btn, self.out_browse,
-                  self.key_edit, self.show_key):
-            w.setEnabled(False)
+        self._set_inputs_enabled(False)
         self.status_lbl.setText("Working…")
         self.log_line(f"Starting decryption  key={mask_key(key)}  out={out_dir}")
         diag_log(f"run start backup={self.detected.psvimg} key={mask_key(key)} out={out_dir}")
@@ -562,8 +568,7 @@ class MainWindow(QMainWindow):
         self.status_lbl.setText("DECRYPTION SUCCESSFUL")
         self.log_line(f"✓ DECRYPTION SUCCESSFUL — {res.file_count} files → {res.decrypted_dir}")
         diag_log(f"run ok title={res.title_id} files={res.file_count} out={res.decrypted_dir}")
-        for w in (self.decrypt_btn, self.browse_btn, self.out_browse):
-            w.setEnabled(True)
+        self._set_inputs_enabled(True)
 
     def _on_error(self, msg: str) -> None:
         idx = min(self.progress_bar.value(), len(STAGES) - 1)
@@ -573,8 +578,7 @@ class MainWindow(QMainWindow):
             self.log_line(f"✗ {line}")
         diag_log(f"run FAILED: {msg[:400]}")
         QMessageBox.critical(self, "Decryption failed", msg)
-        for w in (self.decrypt_btn, self.browse_btn, self.out_browse):
-            w.setEnabled(True)
+        self._set_inputs_enabled(True)
 
     def _open_output(self) -> None:
         if not self.last_result or not self.last_result.decrypted_dir.is_dir():
@@ -703,9 +707,20 @@ def run_cli(argv: list[str]) -> int:
 
 
 # --------------------------------------------------------------------------- #
+def wants_cli(argv: list[str]) -> bool:
+    """True when argv selects headless mode.
+
+    Accepts ``--decrypt PATH``, ``--decrypt=PATH`` and ``--version`` — the
+    ``=`` form is what Windows shortcuts / other programs commonly pass; with
+    an exact-match check it silently launched the GUI instead of decrypting.
+    """
+    return any(a == "--decrypt" or a.startswith("--decrypt=") or a == "--version"
+               for a in argv)
+
+
 def main() -> int:
     argv = sys.argv[1:]
-    if any(a in ("--decrypt", "--version") for a in argv):
+    if wants_cli(argv):
         return run_cli(argv)
 
     app = QApplication(sys.argv)

@@ -325,7 +325,7 @@ def decrypt_pfs_set(set_dir: Path | str, out_dir: Path | str) -> list[Path]:
     out_files: list[Path] = []
     for name, ftype, size in entries:
         # Directory entry (bit 0x8000) — no data to decrypt.
-        if ftype & 0x8000 or size == 0:
+        if ftype & 0x8000:
             continue
 
         src = _find_source(set_dir, name)
@@ -334,8 +334,10 @@ def decrypt_pfs_set(set_dir: Path | str, out_dir: Path | str) -> list[Path]:
 
         # Mirror the on-disk location (e.g. sce_sys/keystone stays under sce_sys).
         dest_rel = src.relative_to(set_dir)
-        if ftype & NENC_BIT:
-            # Unencrypted system file — copy verbatim.
+        if ftype & NENC_BIT or size == 0:
+            # Unencrypted system file or empty member — copy verbatim. A
+            # size-0 entry is a real member of the save set: silently
+            # dropping it loses the file from the decrypted output.
             dest = out_dir / dest_rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(src.read_bytes())

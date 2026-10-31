@@ -12,6 +12,9 @@ venv/
 # Test / scratch output (never commit generated work dirs)
 tests/work/
 
+# Agent task state
+.hermes/
+
 # OS / editor
 .DS_Store
 Thumbs.db

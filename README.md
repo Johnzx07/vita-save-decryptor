@@ -49,6 +49,12 @@ Hit a decryption error, or a save that won't load into Vita3K? Tell me — that 
 
 ---
 
+## Download
+
+Grab the latest self-contained **`VitaSaveDecryptor.exe`** from the
+[Releases page](https://github.com/Johnzx07/vita-save-decryptor/releases/latest) —
+double-click to run, no install, no network needed.
+
 ## What it does
 
 Given a PS Vita CMA save backup, the app runs a two-stage pipeline:
@@ -127,6 +133,14 @@ pip install -r requirements.txt
 python vita_main.py            # launches the GUI
 ```
 
+Headless (no GUI) — also accepted by the packaged `.exe`; the `--decrypt=PATH`
+`=`-form works for shortcuts and scripts:
+
+```bash
+python vita_main.py --decrypt "C:\backups\savedata.psvimg" --key <64-hex> --out "C:\out"
+python vita_main.py --version
+```
+
 Or use the decryptor directly:
 
 ```python
@@ -148,7 +162,8 @@ out = decrypt_pfs_set(Path("path/to/extracted_savedata"), Path("output_dir"))
 Standalone regression test — no pytest, no network:
 
 ```bash
-python tests/test_pfs_native.py
+python tests/test_pfs_native.py      # byte-exact fixture decrypt
+python tests/test_regressions.py     # bug regressions + full pipeline E2E
 ```
 
 It decrypts the vendored PCSG90096 fixture and asserts every output file is
@@ -165,7 +180,8 @@ app/
 ├── resources.py               # resource manager (frozen-aware paths)
 └── resources/                 # logo.png, VitaSaveDecryptor.ico
 tools/psvimgtools/             # bundled stage-1 tool + Cygwin DLLs (MIT)
-tests/test_pfs_native.py       # regression test
+tests/test_pfs_native.py       # byte-exact regression test
+tests/test_regressions.py      # bug regressions + pipeline E2E
 tests/fixtures/hencore_savedata/   # PCSG90096 fixture (h-encore v2.0, MIT)
 tests/fixtures/ground_truth/       # reference output for byte-exact checks
 vita_main.py                   # PyInstaller entry shim
