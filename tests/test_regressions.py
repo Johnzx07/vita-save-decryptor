@@ -60,9 +60,12 @@ def r1_empty_files_preserved() -> None:
     out_dir = Path(tempfile.mkdtemp(prefix="vrd_r1_out_"))
     try:
         # Valid pfsSKKey: klicensee = CBC-decrypt(blob) with the public SK key.
+        # Layout (per the real fixture): magic[8] @0x0, version u32 @0x8,
+        # 20 reserved bytes (iv[16] lives @0x10 inside them), blob @0x20.
         klicensee = b"K" * 16
         blob = AES.new(PFS_SK_ENCKEY, AES.MODE_CBC, b"\x00" * 16).encrypt(klicensee)
-        sealed = b"pfsSKKey" + struct.pack("<I", 0x10000) + b"\x00" * 16 + blob + b"\x00" * 16
+        sealed = (b"pfsSKKey" + struct.pack("<I", 0x10000) + b"\x00" * 20
+                  + blob + b"\x00" * 16)
         (set_dir / "sce_sys").mkdir(parents=True)
         (set_dir / "sce_sys" / "sealedkey").write_bytes(sealed)
         (set_dir / "sce_pfs" / "icv.db").mkdir(parents=True)
@@ -217,11 +220,168 @@ def r4_e2e_pipeline() -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------- #
+# R5 — save members named like PFS metadata must not resolve to sce_pfs/ files
+#      (bug: files.db entry "blocks.db" fell through to sce_pfs/blocks.db,
+#       aborting the whole decrypt with "Could not resolve icv_salt")
+# --------------------------------------------------------------------------- #
+def r5_metadata_name_collision() -> None:
+    from Crypto.Cipher import AES
+    from app.pfs_native import decrypt_pfs_set, derive_keys, PFS_SK_ENCKEY, SECTOR_SIZE
+
+    set_dir = Path(tempfile.mkdtemp(prefix="vrd_r5_set_"))
+    out_dir = Path(tempfile.mkdtemp(prefix="vrd_r5_out_"))
+    try:
+        klicensee = b"K" * 16
+        blob = AES.new(PFS_SK_ENCKEY, AES.MODE_CBC, b"\x00" * 16).encrypt(klicensee)
+        # Real layout (per the fixture): magic[8] @0x0, version u32 @0x8,
+        # 20 reserved bytes (iv[16] lives @0x10 inside them), blob @0x20.
+        sealed = (b"pfsSKKey" + struct.pack("<I", 0x10000) + b"\x00" * 20
+                  + blob + b"\x00" * 16)
+        (set_dir / "sce_sys").mkdir(parents=True)
+        (set_dir / "sce_sys" / "sealedkey").write_bytes(sealed)
+        icv_dir = set_dir / "sce_pfs" / "icv.db"
+        icv_dir.mkdir(parents=True)
+
+        # Real save member with a metadata-like NAME, encrypted, salt 0x12345678.
+        plain = (b"SAVE-MEMBER-CONTENT" * 16)[:192]   # 16-byte aligned
+        salt = 0x12345678
+        dec_key, twk = derive_keys(klicensee, salt)
+
+        # XTS-ENCRYPT with the decryptor's EXACT tweak chain: the decryptor
+        # computes P = D_k1(C ^ t) ^ t, so the inverse is C = E_k1(P ^ t) ^ t.
+        from Crypto.Cipher import AES as _AES
+
+        def _gf_x(tw):
+            from app.pfs_native import _gf_mult_x_words
+            return _gf_mult_x_words(tw)
+
+        seed = struct.pack("<Q", 0) + b"\x00" * 8
+        tw = list(struct.unpack("<4I", _AES.new(twk, _AES.MODE_ECB).encrypt(seed)))
+        e1 = _AES.new(dec_key, _AES.MODE_ECB)
+        ct = bytearray(len(plain))
+        for i in range(0, len(plain), 16):
+            t = struct.pack("<4I", *tw)
+            xored = bytes(x ^ y for x, y in zip(plain[i:i + 16], t))
+            enc = e1.encrypt(xored)
+            ct[i:i + 16] = bytes(x ^ y for x, y in zip(enc, t))
+            tw = _gf_x(tw)
+        cipher = bytes(ct)
+        # Real PFS members are stored sector-aligned (0x8000) on disk; the ICV
+        # covers the padded sector, so write the member that way.
+        cipher_file = cipher + b"\x00" * (0x8000 - len(cipher))
+        (set_dir / "blocks.db").write_bytes(cipher_file)
+
+        # Store the true ICV root for salt 0x12345678. The decryptor verifies
+        # the ICV over the SECTOR-PADDED ciphertext (data trimmed/padded to a
+        # whole 0x8000 sector), so the record must carry that root.
+        from app.pfs_native import compute_file_icv, SECTOR_SIZE
+        padded = cipher_file   # ICV covers the full stored sector
+        root = compute_file_icv(padded, klicensee, salt)
+        rec = bytearray(0x400)
+        rec[0:8] = b"SCEICVDB"
+        struct.pack_into("<I", rec, 0x28, 1)        # nSectors
+        rec[0x2C:0x2C + 20] = root                  # stored ICV root
+        (icv_dir / f"{salt:08x}.icv").write_bytes(bytes(rec))
+
+        # sce_pfs/ metadata as in a real extracted set (the decoys).
+        meta = {
+            "files.db": b"\x00" * 0x400,   # placeholder; overwritten below
+            "blocks.db": b"B" * 512,
+            "blocks_grid.db": b"G" * 512,
+            "free_blocks.db": b"F" * 512,
+        }
+        page = bytearray(0x400)
+        page[8:12] = b"PGHD"
+        fo = 16
+        struct.pack_into("<I", page, fo, 0)
+        page[fo + 4:fo + 4 + 9] = b"blocks.db"
+        io = 16 + 9 * 72
+        struct.pack_into("<IHHII", page, io, 0, 0x0000, 0, len(plain), 0)
+        meta["files.db"] = bytes(page)
+        for n, b in meta.items():
+            (set_dir / "sce_pfs" / n).write_bytes(b)
+
+        try:
+            produced = decrypt_pfs_set(set_dir, out_dir)
+        except Exception as e:
+            check("R5 member named blocks.db decrypts (not sce_pfs decoy)",
+                  False, f"raised {e!r}")
+            return
+        got = out_dir / "blocks.db"
+        ok = got.is_file() and got.read_bytes()[:len(plain)] == plain
+        check("R5 member named blocks.db decrypts (not sce_pfs decoy)", ok,
+              f"output={[p.name for p in produced]}")
+        # the decrypted member must be the SAVE file, never the metadata bytes
+        if got.is_file():
+            check("R5 output is save content, not sce_pfs metadata bytes",
+                  got.read_bytes() != b"B" * 512)
+    finally:
+        shutil.rmtree(set_dir, ignore_errors=True)
+        shutil.rmtree(out_dir, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- #
+# R6 — truncated files.db page must raise a clear PipelineError-family error,
+#      never a raw struct.error from unpack past the buffer end
+# --------------------------------------------------------------------------- #
+def r6_truncated_files_db() -> None:
+    from app.pfs_native import decrypt_pfs_set
+
+    set_dir = Path(tempfile.mkdtemp(prefix="vrd_r6_set_"))
+    out_dir = Path(tempfile.mkdtemp(prefix="vrd_r6_out_"))
+    try:
+        klicensee = b"K" * 16
+        from Crypto.Cipher import AES
+        from app.pfs_native import PFS_SK_ENCKEY
+        blob = AES.new(PFS_SK_ENCKEY, AES.MODE_CBC, b"\x00" * 16).encrypt(klicensee)
+        sealed = (b"pfsSKKey" + struct.pack("<I", 0x10000) + b"\x00" * 16
+                  + blob + b"\x00" * 16)
+        (set_dir / "sce_sys").mkdir(parents=True)
+        (set_dir / "sce_sys" / "sealedkey").write_bytes(sealed)
+        (set_dir / "sce_pfs" / "icv.db").mkdir(parents=True)
+        (set_dir / "first.dat").write_bytes(b"hi")
+
+        # Page 0 complete (first.dat). Page 1 truncated at 120 bytes: the
+        # block-header marker AND the entry name are present, but the info
+        # array (offset 664) is beyond the buffer end. Pre-fix this raised a
+        # raw struct.error out of unpack_from (crash path with no user-facing
+        # message) — must become a clear PfsNativeError.
+        def page_with(name: str) -> bytearray:
+            p = bytearray(0x400)
+            p[8:12] = b"PGHD"
+            fo = 16
+            struct.pack_into("<I", p, fo, 0)
+            p[fo + 4:fo + 4 + len(name)] = name.encode()
+            io = 16 + 9 * 72
+            struct.pack_into("<IHHII", p, io, 0, 0x4000, 0, 2, 0)
+            return p
+
+        full = page_with("first.dat")
+        trunc = page_with("second.dat")[:120]   # name ends @90; info array @664
+        (set_dir / "sce_pfs" / "files.db").write_bytes(bytes(full) + bytes(trunc))
+
+        try:
+            decrypt_pfs_set(set_dir, out_dir)
+            check("R6 truncated files.db -> clear PfsNativeError", False,
+                  "no error raised (entry silently dropped)")
+        except Exception as e:
+            from app.pfs_native import PfsNativeError
+            check("R6 truncated files.db -> clear PfsNativeError",
+                  isinstance(e, PfsNativeError),
+                  f"got {type(e).__name__}: {e}")
+    finally:
+        shutil.rmtree(set_dir, ignore_errors=True)
+        shutil.rmtree(out_dir, ignore_errors=True)
+
+
 def main() -> int:
     r1_empty_files_preserved()
     r2_cli_routing()
     r3_gui_input_not_locked()
     r4_e2e_pipeline()
+    r5_metadata_name_collision()
+    r6_truncated_files_db()
     print("\n=== REGRESSION SUMMARY ===")
     print(f"OVERALL: {'PASS' if not failures else 'FAIL'}"
           + (f"  ({len(failures)} failing: {failures})" if failures else ""))

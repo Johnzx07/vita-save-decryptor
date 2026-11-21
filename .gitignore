@@ -20,3 +20,6 @@ tests/work/
 Thumbs.db
 .idea/
 .vscode/
+
+# Brand-badge QC renders (SVGs are the source; PNGs regenerate anywhere)
+app/resources/badges/*.png

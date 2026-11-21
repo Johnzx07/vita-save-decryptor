@@ -159,22 +159,37 @@ class PfsFileEntry:
 
 
 def _parse_files_db(fdb: bytes) -> list[tuple[str, int, int]]:
-    """Yield ``(name, ftype, size)`` for every file entry in files.db."""
+    """Yield ``(name, ftype, size)`` for every file entry in files.db.
+
+    A short final page (archive trimmed on export) is still parsed: entries
+    whose fields do not fit inside the buffer raise a clear PfsNativeError
+    instead of crashing with a raw struct.error or being silently dropped.
+    """
     entries: list[tuple[str, int, int]] = []
-    n_pages = len(fdb) // FILES_DB_PAGE
-    for pg in range(n_pages):
-        off = pg * FILES_DB_PAGE
-        # Skip fully-zero pages (no block header).
-        if fdb[off + 8:off + 12] == b"\x00\x00\x00\x00":
+    for off in range(0, len(fdb), FILES_DB_PAGE):
+        page = fdb[off:off + FILES_DB_PAGE]
+        end = len(page)
+        # Skip fully-zero pages (no block header); need at least the header.
+        if end < 12 or page[8:12] == b"\x00\x00\x00\x00":
             continue
         for i in range(9):
-            fo = off + 16 + i * 72
-            idx = struct.unpack_from("<I", fdb, fo)[0]
+            fo = 16 + i * 72
+            if fo + 4 > end:
+                break
+            idx = struct.unpack_from("<I", page, fo)[0]
             if idx == 0xFFFFFFFF:
                 continue
-            name = fdb[fo + 4:fo + 4 + 68].split(b"\x00")[0].decode("utf-8", "replace")
-            info_off = off + 16 + 9 * 72 + i * 16
-            fidx, ftype, _p0, size, _p1 = struct.unpack_from("<IHHII", fdb, info_off)
+            if fo + 72 > end:
+                raise PfsNativeError(
+                    "files.db is truncated: entry record cut off at offset "
+                    f"0x{off + fo:X}. Re-export the CMA backup.")
+            name = page[fo + 4:fo + 4 + 68].split(b"\x00")[0].decode("utf-8", "replace")
+            info_off = 16 + 9 * 72 + i * 16
+            if info_off + 16 > end:
+                raise PfsNativeError(
+                    "files.db is truncated: info record cut off at offset "
+                    f"0x{off + info_off:X}. Re-export the CMA backup.")
+            fidx, ftype, _p0, size, _p1 = struct.unpack_from("<IHHII", page, info_off)
             if name:
                 entries.append((name, ftype, size))
     return entries
@@ -364,16 +379,34 @@ def decrypt_pfs_set(set_dir: Path | str, out_dir: Path | str) -> list[Path]:
     return sorted(out_files)
 
 
+#: Names of the PFS bookkeeping databases that live inside ``sce_pfs/``. A
+#: save member may legitimately be *named* one of these (e.g. a game file
+#: called "blocks.db"), so the metadata under sce_pfs/ must never be treated
+#: as that member's data file.
+PFS_METADATA_NAMES = frozenset({
+    "files.db", "blocks.db", "blocks_grid.db", "free_blocks.db",
+    "direct_blocks.db", "hash.db", "icv.db", "sse_hash.db", "nptr.db",
+})
+
+
 def _find_source(set_dir: Path, name: str) -> Path | None:
-    """Find the on-disk file for a files.db entry (case-insensitive)."""
+    """Find the on-disk file for a files.db entry (case-insensitive).
+
+    Search order: set root, then ``sce_sys/`` (the savedata layout), then a
+    bounded whole-set search. Files under ``sce_pfs/`` are PFS bookkeeping
+    metadata and are never a save member's data — a member named e.g.
+    "blocks.db" lives at the set root, and resolving it to the sce_pfs
+    metadata silently decrypts the wrong bytes (or aborts with
+    "Could not resolve icv_salt").
+    """
     lname = name.lower()
     # Common savedata layout: system.dat at set root; sce_sys/* under it.
     candidates = [set_dir / lname, set_dir / "sce_sys" / lname]
     for c in candidates:
         if c.is_file():
             return c
-    # Fallback: search the whole set (bounded).
+    # Fallback: search the whole set (bounded), skipping PFS metadata.
     for p in set_dir.rglob(lname):
-        if p.is_file() and p.parent.name != "icv.db":
+        if p.is_file() and "sce_pfs" not in p.parts:
             return p
     return None
