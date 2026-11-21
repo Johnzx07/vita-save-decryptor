@@ -375,6 +375,78 @@ def r6_truncated_files_db() -> None:
         shutil.rmtree(out_dir, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------- #
+# R7 — SVG brand buttons (YouTube / Ko-fi): every bundled SVG must be a pure
+#      vector shape file (this QtSvg build hard-crashes on <text>), must
+#      rasterize to non-blank pixels, and each button must open the right URL.
+# --------------------------------------------------------------------------- #
+def r7_brand_buttons() -> None:
+    import app.main as m
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QImage
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtWidgets import QPushButton
+
+    expect = {
+        "youtube.svg": m.LINKS["youtube"],
+        "kofi.svg": m.LINKS["kofi"],
+        "youtube-badge.svg": m.LINKS["youtube"],
+        "kofi-badge.svg": m.LINKS["kofi"],
+    }
+    all_ok, notes = True, []
+    for name in expect:
+        try:
+            from app.resources import ui_resource_dir
+            p = ui_resource_dir() / "badges" / name
+            data = p.read_bytes()
+            svg = data.decode("utf-8")
+            if "<text" in svg:
+                notes.append(f"{name}: contains <text> (QtSvg crash risk)")
+                all_ok = False
+                continue
+            icon = m.svg_icon(name)
+            if icon.isNull():
+                notes.append(f"{name}: null icon")
+                all_ok = False
+                continue
+            img = icon.pixmap(96, 96).toImage()
+            if img.isNull() or all(img.pixel(x, y) >> 24 == 0
+                                   for x in range(0, img.width(), 3)
+                                   for y in range(0, img.height(), 3)):
+                notes.append(f"{name}: rasterized blank")
+                all_ok = False
+        except Exception as e:
+            notes.append(f"{name}: {e!r}")
+            all_ok = False
+    check("R7 all brand SVGs valid, text-free, non-blank", all_ok, "; ".join(notes))
+
+    # buttons open the right URLs
+    opened: list[str] = []
+    real = m.QDesktopServices.openUrl
+    m.QDesktopServices.openUrl = staticmethod(lambda url: opened.append(url.toString()) or True)
+    try:
+        win = m.MainWindow()
+        win.youtube_btn.click()
+        win.kofi_btn.click()
+    finally:
+        m.QDesktopServices.openUrl = real
+    check("R7 header YouTube button opens channel URL",
+          m.LINKS["youtube"] in opened, f"opened={opened}")
+    check("R7 header Ko-fi button opens Ko-fi URL",
+          m.LINKS["kofi"] in opened, f"opened={opened}")
+
+    # About dialog builds with its two brand pills (no exec, offscreen-safe)
+    try:
+        dlg = m.AboutDialog()
+        pills = [b for b in dlg.findChildren(QPushButton)
+                 if (b.accessibleName() or "").endswith("link")]
+        check("R7 About dialog shows 2 brand pills", len(pills) == 2,
+              f"found={len(pills)}")
+        dlg.deleteLater()
+    except Exception as e:
+        check("R7 About dialog shows 2 brand pills", False, f"raised {e!r}")
+
+
 def main() -> int:
     r1_empty_files_preserved()
     r2_cli_routing()
@@ -382,6 +454,7 @@ def main() -> int:
     r4_e2e_pipeline()
     r5_metadata_name_collision()
     r6_truncated_files_db()
+    r7_brand_buttons()
     print("\n=== REGRESSION SUMMARY ===")
     print(f"OVERALL: {'PASS' if not failures else 'FAIL'}"
           + (f"  ({len(failures)} failing: {failures})" if failures else ""))

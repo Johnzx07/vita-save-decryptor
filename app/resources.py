@@ -43,6 +43,40 @@ def icon_path() -> Path:
     return p
 
 
+def svg_icon(name: str) -> "QIcon":
+    """Bundled brand SVG (e.g. 'youtube.svg' from resources/badges) as a QIcon.
+
+    Rendered through Qt's SVG plugin at native resolution. Returns an empty
+    QIcon (button keeps its text) if the plugin or the file is unavailable,
+    so a missing badge can never crash the UI. NOTE: this QtSvg build cannot
+    rasterize <text> elements — bundled SVGs must be pure vector shapes.
+    """
+    from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
+    from PySide6.QtCore import QByteArray
+
+    p = ui_resource_dir() / "badges" / name
+    if not p.is_file():
+        return QIcon()
+    try:
+        from PySide6.QtSvg import QSvgRenderer
+        data = p.read_bytes()
+        svg = data.decode("utf-8", "replace")
+        w = int(svg.split('width="', 1)[1].split('"', 1)[0])
+        h = int(svg.split('height="', 1)[1].split('"', 1)[0])
+        img = QImage(w * 2, h * 2, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(0)
+        r = QSvgRenderer(QByteArray(data))
+        if not r.isValid():
+            return QIcon()
+        painter = QPainter(img)
+        r.render(painter)
+        painter.end()
+        pm = QPixmap.fromImage(img)
+        return QIcon(pm) if not pm.isNull() else QIcon()
+    except Exception:
+        return QIcon()
+
+
 def bundled_tools() -> dict[str, Path]:
     """Verified native tools. Raises PipelineError with a clear message if the
     application was packaged without them."""

@@ -37,6 +37,7 @@ a = Analysis(
         (os.path.join(ROOT, 'tools', 'psvimgtools'), 'tools/psvimgtools'),
         (os.path.join(ROOT, 'app', 'resources', 'logo.png'), 'resources'),
         (os.path.join(ROOT, 'app', 'resources', 'VitaSaveDecryptor.ico'), 'resources'),
+        (os.path.join(ROOT, 'app', 'resources', 'badges'), 'resources/badges'),
     ],
     hiddenimports=[
         # pycryptodome modules used by app/pfs_native.py (stage 2). PyInstaller's

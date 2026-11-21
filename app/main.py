@@ -33,7 +33,14 @@ from . import APP_NAME, APP_VERSION
 from .core import (
     KEY_RE, PipelineError, STAGES, DecryptResult, detect_save, decrypt_backup,
 )
-from .resources import icon_path, logo_path, bundled_tools
+from .resources import icon_path, logo_path, bundled_tools, svg_icon
+
+# Juan's channels — the header/About buttons open these (2026-11-21).
+LINKS = {
+    "youtube": "https://www.youtube.com/@TheNewGamePluss",
+    "kofi": "https://ko-fi.com/thenewgameplus",
+    "discord": "https://discord.gg/nwXq8wZzEA",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -84,6 +91,45 @@ def find_game_icon(root: Path, max_depth: int = 3) -> Path | None:
             if p.is_file() and p.name.lower() in _ICON_NAMES:
                 return p
     return None
+
+
+# --------------------------------------------------------------------------- #
+# SVG brand buttons (YouTube / Ko-fi)
+# --------------------------------------------------------------------------- #
+BRAND_QSS = {
+    "youtube": ("QPushButton#BrandYouTube { background:#FF0000; border:none;"
+                " border-radius:8px; padding:4px 10px; }"
+                "QPushButton#BrandYouTube:hover { background:#ff2b2b; }"),
+    "kofi":    ("QPushButton#BrandKofi { background:#13C3FF; border:none;"
+                " border-radius:8px; padding:4px 10px; }"
+                "QPushButton#BrandKofi:hover { background:#3fd0ff; }"),
+}
+
+
+def _brand_button(svg_name: str, label: str, url: str,
+                  icon_side: bool = False) -> QPushButton:
+    """Clickable SVG brand pill. Renders the bundled SVG (icon-only white
+    glyphs or badge pills) through the Qt SVG plugin; opens ``url`` in the
+    user's default browser. Never raises — a missing SVG degrades to a text
+    button so the UI can't crash over a decoration."""
+    key = "youtube" if "youtube" in svg_name else "kofi"
+    btn = QPushButton()
+    btn.setObjectName("BrandYouTube" if key == "youtube" else "BrandKofi")
+    btn.setCursor(Qt.PointingHandCursor)
+    icon = svg_icon(svg_name)
+    if icon.isNull():
+        btn.setText(label)          # graceful fallback
+    elif icon_side:
+        btn.setIcon(icon)           # small white glyph beside text
+        btn.setText(f"  {label}")
+    else:
+        pm = icon.pixmap(150 if key == "youtube" else 112, 34)
+        btn.setIcon(QIcon(pm))
+        btn.setIconSize(pm.size())
+    btn.setToolTip(url)
+    btn.setAccessibleName(f"{label} link")
+    btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
+    return btn
 
 
 # --------------------------------------------------------------------------- #
@@ -159,6 +205,16 @@ class AboutDialog(QDialog):
         links.setAlignment(Qt.AlignCenter)
         links.setOpenExternalLinks(True)
         lay.addWidget(links)
+
+        # SVG brand buttons — the maker's channels (open in the default browser)
+        brand = QHBoxLayout()
+        brand.setSpacing(10)
+        brand.setAlignment(Qt.AlignCenter)
+        for key, svg, label in (("youtube", "youtube-badge.svg", "YouTube"),
+                                ("kofi", "kofi-badge.svg", "Ko-fi")):
+            b = _brand_button(svg, label, LINKS[key])
+            brand.addWidget(b)
+        lay.addLayout(brand)
 
         close = QPushButton("Close")
         close.clicked.connect(self.accept)
@@ -241,6 +297,14 @@ class MainWindow(QMainWindow):
         self.about_btn.setObjectName("GhostBtn")
         self.about_btn.clicked.connect(lambda: AboutDialog(self).exec())
         h.addWidget(self.about_btn)
+
+        # SVG brand buttons (white glyph + label) — Juan's channels
+        self.youtube_btn = _brand_button("youtube.svg", "YouTube",
+                                         LINKS["youtube"], icon_side=True)
+        self.kofi_btn = _brand_button("kofi.svg", "Ko-fi",
+                                      LINKS["kofi"], icon_side=True)
+        h.addWidget(self.youtube_btn)
+        h.addWidget(self.kofi_btn)
         return w
 
     def _build_backup_card(self) -> QFrame:
@@ -313,7 +377,7 @@ class MainWindow(QMainWindow):
 
     def _build_output_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        lbl = QLabel("OUTPUT")
+        lbl = QLabel("3 · OUTPUT")
         lbl.setObjectName("StepTitle")
         row.addWidget(lbl, 0)
         self.out_edit = QLineEdit()
@@ -640,6 +704,13 @@ QCheckBox::indicator { width: 15px; height: 15px; border-radius: 3px;
 QCheckBox::indicator:checked { background: #2ea8ff; border-color: #2ea8ff; }
 
 QMessageBox, QMessageBox QLabel { background-color: #161d2c; color: #e8ecf3; }
+
+QPushButton#BrandYouTube { background:#FF0000; border:none; border-radius:8px;
+    padding:5px 12px; color:#ffffff; font-weight:700; }
+QPushButton#BrandYouTube:hover { background:#ff2b2b; }
+QPushButton#BrandKofi { background:#13C3FF; border:none; border-radius:8px;
+    padding:5px 12px; color:#0b2e3b; font-weight:700; }
+QPushButton#BrandKofi:hover { background:#3fd0ff; }
 """
 
 
