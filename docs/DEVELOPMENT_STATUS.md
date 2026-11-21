@@ -124,3 +124,37 @@ Decrypted `sce_sys/param.sfo` is a valid SFO container whose fields include the 
 
 ## Checkpoints
 - Git tag `checkpoint/backend-verified` = verified backend + locked fixture (see git log).
+
+## 2026-11-21 — overnight bug hunt (unreviewed, NOT yet pushed to GitHub)
+Two real bugs found with new red regressions first (tests R5/R6 in
+`tests/test_regressions.py`), then fixed (green: 20/20 regression checks,
+9/9 native checks, full pipeline byte-exact vs ground truth):
+
+1. **Save members named like PFS metadata were resolved to the wrong file.**
+   `pfs_native._find_source` fell through to a whole-set search and matched
+   the PFS bookkeeping file under `sce_pfs/` (e.g. a game file literally
+   called `blocks.db` → `sce_pfs/blocks.db`). Effect: "Could not resolve
+   icv_salt" abort, or silently decrypted metadata bytes instead of the save
+   file. Fix: `sce_pfs/` is never a source for a save member. (`PFS_METADATA_NAMES`
+   documents the metadata set.)
+2. **Truncated `files.db` (trimmed final page) crashed with a raw
+   `struct.error`** (unpack past the buffer) instead of a user-facing error.
+   Fix: `_parse_files_db` now parses short final pages and raises
+   `PfsNativeError("files.db is truncated: ... Re-export the CMA backup.")`.
+
+Feature (requested): **SVG brand buttons** for the maker's channels —
+`app/resources/badges/` holds pure-vector YouTube/Ko-fi SVGs; the main window
+header and the About dialog render them through the Qt SVG plugin and open the
+channel URLs (R7 enforces text-free SVGs + correct URLs + non-blank render).
+Constraint discovered: **this PySide6/QtSvg build hard-crashes on `<text>`
+elements** — bundled SVGs must be shapes only (labels are native Qt text).
+`VitaSaveDecryptor.spec` bundles `resources/badges/` for the frozen EXE.
+Docs fixed: README quick-help Discord link pointed at `#` (dead) — now the
+real invite.
+
+Observations (NOT changed, for review):
+- `core.py` builds test sealedkeys with the blob at 0x1C (12 reserved bytes
+  assumed 20); the real sealedkey has the blob at 0x20 (`extract_klicensee`'s
+  offsets are the correct ones). Only affects synthetic keys.
+- Repo `.venv` (Python 3.13) lacks pycryptodome although `requirements.txt`
+  lists it; test suites were run with a Python env that has it.
